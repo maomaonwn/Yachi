@@ -60,7 +60,7 @@ public:
     }
 
     //对返回内容进行一次处理的接口
-    virtual QString processRawContent(const QString &rawContent) const
+    virtual QString processRawContent(const QString &rawContent, const QString &targetLang = "") const
     {
         return rawContent;
     }
@@ -136,7 +136,7 @@ public:
         return "检测到 Pixiv 小说，正在通过内部接口一键秒抓全文...";
     }
 
-    QString processRawContent(const QString &rawContent) const override {
+    QString processRawContent(const QString &rawContent, const QString &targetLang = "") const override {
         QString jsonStr = rawContent.trimmed();
 
         //提取纯Json内容
@@ -158,8 +158,75 @@ public:
             if (root.contains("body") && root["body"].isObject()) {
                 QJsonObject body = root["body"].toObject();
 
+                //标题、作者
                 QString title = body["title"].toString();
                 QString author = body["userName"].toString();
+
+                //字数
+                int charCount = body["characterCount"].toInt();
+
+                //限制级
+                int xRestrict = body["xRestrict"].toInt();  //0 全年龄，1 R-18，2 R-18G
+                QString restrictStr = "全年龄";
+                if(xRestrict == 1) restrictStr = "R-18";
+                else if(xRestrict == 2) restrictStr = "R-18G";
+
+                //时间
+                //这里需要格式化转化一下（即，举例，将 026-05-24T17:58:03+00:00 转换为 2026-05-24 17:58:03）
+                QString rawCreateDate = body["createDate"].toString();
+                QString rawUploadDate = body["uploadDate"].toString();
+                QDateTime dt1 = QDateTime::fromString(rawCreateDate, Qt::ISODate);
+                QDateTime dt2 = QDateTime::fromString(rawUploadDate, Qt::ISODate);
+
+                QString formattedCreateDate = rawCreateDate;
+                QString formattedUploadDate = rawUploadDate;
+                if(dt1.isValid())
+                    formattedCreateDate = dt1.toLocalTime().toString("yyyy-MM-dd HH:mm:ss");
+                if(dt2.isValid())
+                    formattedUploadDate = dt2.toLocalTime().toString("yyyy-MM-dd HH:mm:ss");
+
+                //提取Tags
+                //处理tagList
+                QStringList tagList;
+                if(body.contains("tags") && body["tags"].isObject())
+                {
+                    QJsonObject tagsRootObj = body["tags"].toObject();
+                    if(tagsRootObj.contains("tags") && tagsRootObj["tags"].isArray())
+                    {
+                        QJsonArray tagsArray = tagsRootObj["tags"].toArray();
+
+                        bool isTargetChinese = targetLang.contains("简体中文");
+                        bool isTargetEnglish = targetLang.contains("English");
+
+                        //遍历
+                        for(auto tagVal : tagsArray)
+                        {
+                            QJsonObject tagObj = tagVal.toObject();
+                            QString finalTag = "";
+
+                            if(tagObj.contains("translation") && tagObj["translation"].isObject())
+                            {
+                                QJsonObject transObj = tagObj["translation"].toObject();
+
+                                if(isTargetChinese && transObj.contains("zh"))
+                                    finalTag = transObj["zh"].toString();
+
+                                if(isTargetEnglish && transObj.contains("en"))
+                                    finalTag = transObj["en"].toString();
+                            }
+
+                            //兜底，使用日语原生tag
+                            if(finalTag.isEmpty() && tagObj.contains("tag"))
+                                finalTag = tagObj["tag"].toString();
+
+                            //加进列表里
+                            if(!finalTag.isEmpty())
+                                tagList << finalTag;
+                        }
+                    }
+                }
+                //用空格分割标签，并输出
+                QString tags = tagList.isEmpty() ? "无" : "#" + tagList.join("  #");
 
                 //提取简介、用回车替换 <br />
                 QString description = body["description"].toString();
@@ -174,13 +241,28 @@ public:
 
                 //组装成一个纯文本排版
                 return QString("《%1》\n"
-                               "作者：%2\n\n"
+                               "作者：%2\n"
+                               "-------\n"
+                               " %3字、【%4】\n"
+                               " 创建时间  %5\n"
+                               " 更新时间  %6\n"
+                               " （localTime of PC）\n\n"
+                               "【标签】\n"
+                               "%7\n\n"
                                "【内容简介】\n"
-                               "%3\n\n"
+                               "%8\n\n"
                                "============================================================\n\n"
-                               "%4\n\n"
+                               "%9\n\n"
                                "============================================================")
-                    .arg(title, author, description, content);
+                    .arg(title)
+                    .arg(author)
+                    .arg(charCount)
+                    .arg(restrictStr)
+                    .arg(formattedCreateDate)
+                    .arg(formattedUploadDate)
+                    .arg(tags)
+                    .arg(description)
+                    .arg(content);
             }
             //【情况 B】因为某些报错返回的是JSON，而不是小说正文（利用Qt的 Indented 自动将 \uXXXX 转回中文并排版）
             return QString::fromUtf8(doc.toJson(QJsonDocument::Indented));
