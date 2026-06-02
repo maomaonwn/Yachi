@@ -749,7 +749,7 @@ void TranslationPage::fetchUrlContent()
                     } else {
                         //累加各个章节正文内容
                         state->fullContent += QString("\n\n### --- 第 %1 章 ---\n\n").arg(currentPage);
-                        state->fullContent += strategy->processRawContent(pageContent);
+                        state->fullContent += strategy->processRawContent(pageContent, langCombo->currentText());
 
                         if (currentPage < state->maxPage) {
                             sourceText->setPlaceholderText(QString("正在自动抓取系列章节：第 %1/%2 章，请稍候...")
@@ -772,7 +772,7 @@ void TranslationPage::fetchUrlContent()
                     if (state->maxPage > 1) {
                         state->fullContent += QString("\n\n### --- 第 %1 页 ---\n\n").arg(currentPage);
                     }
-                    state->fullContent += strategy->processRawContent(pageContent);
+                    state->fullContent += strategy->processRawContent(pageContent, langCombo->currentText());
 
                     if (currentPage < state->maxPage) {
                         sourceText->setPlaceholderText(QString("发现分页！正在自动抓取第 %1/%2 页，请稍候...")
