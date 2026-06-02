@@ -246,7 +246,7 @@ public:
                                " %3字、【%4】\n"
                                " 创建时间  %5\n"
                                " 更新时间  %6\n"
-                               " （localTime of PC）\n\n"
+                               " （localTimeZone of PC）\n\n"
                                "【标签】\n"
                                "%7\n\n"
                                "【内容简介】\n"
